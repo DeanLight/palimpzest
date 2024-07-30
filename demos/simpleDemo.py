@@ -399,7 +399,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--datasetid", type=str, help="The dataset id")
     parser.add_argument("--task", type=str, help="The task to run")
-    parser.add_argument('--engine', type=str, help='The engine to use. One of sequential, parallel, nosentinel', default='parallel')
+    parser.add_argument('--engine', type=str, help='The engine to use. One of sequential, parallel, nosentinel, pnosentinel', default='parallel')
     parser.add_argument(
         "--policy",
         type=str,
@@ -445,6 +445,8 @@ if __name__ == "__main__":
         engine = pz.PipelinedParallelExecution
     elif engine == 'nosentinel':
         engine = pz.NoSentinelExecution
+    elif engine == 'pnosentinel':
+        engine = pz.ParallelNoSentinelExecution
     
     if os.getenv("OPENAI_API_KEY") is None and os.getenv("TOGETHER_API_KEY") is None:
         print("WARNING: Both OPENAI_API_KEY and TOGETHER_API_KEY are unset")
