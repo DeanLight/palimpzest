@@ -70,7 +70,7 @@ class LLMConvert(ConvertOp):
     def materializes(self, logical_operator) -> bool:
         if not isinstance(logical_operator, logical.ConvertScan):
             return False
-        is_vision_model = self.model in getVisionModels()
+        is_vision_model = getattr(self, "model", None) in getVisionModels()
         if logical_operator.image_conversion:
             return is_vision_model
         else:
@@ -563,3 +563,39 @@ class LLMConvertConventional(LLMConvert):
 
         generation_stats = sum(fields_stats.values())
         return fields_answers, generation_stats
+
+
+class LLMConvertBonded(LLMConvert):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def convert(self, 
+                candidate_content,
+                fields) -> Tuple[Dict[FieldName, List[Any]], GenerationStats]:
+
+        prompt = self._construct_query_prompt(fields_to_generate=fields)
+
+        # generate all fields in a single query
+        answer, generation_stats = self._dspy_generate_fields(content=candidate_content, prompt=prompt)
+        json_answers = self.parse_answer(answer, fields)
+
+        # if there was an error, execute a conventional query
+        for field, values in json_answers.items():
+            if values == []:
+                print("Falling back to conventional conversion")
+                conventional_op = type('LLMFallback',
+                                        (LLMConvertConventional,),
+                                        {'model': self.model,
+                                        'prompt_strategy': self.prompt_strategy})
+            
+                field_answer, field_stats = conventional_op(
+                    inputSchema = self.inputSchema,
+                    outputSchema = self.outputSchema,
+                    shouldProfile = self.shouldProfile,
+                    query_strategy = self.query_strategy,
+                ).convert(candidate_content, field)
+                json_answers[field] = field_answer[field]
+                generation_stats += field_stats
+        
+        return json_answers, generation_stats

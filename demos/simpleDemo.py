@@ -2,9 +2,11 @@
 import palimpzest as pz
 
 from tabulate import tabulate
+from pathlib import Path
 from PIL import Image
 
 from palimpzest.elements import GroupBySig
+from palimpzest.utils import getModels
 
 import gradio as gr
 import numpy as np
@@ -17,6 +19,80 @@ import time
 import os
 import csv
 
+FAR_AWAY_ADDRS = [
+    "Melcher St",
+    "Sleeper St",
+    "437 D St",
+    "Seaport Blvd",
+    "50 Liberty Dr",
+    "Telegraph St",
+    "Columbia Rd",
+    "E 6th St",
+    "E 7th St",
+    "E 5th St",
+]
+
+class RealEstateListingFiles(pz.Schema):
+    """The source text and image data for a real estate listing."""
+
+    listing = pz.StringField(desc="The name of the listing", required=True)
+    text_content = pz.StringField(
+        desc="The content of the listing's text description", required=True
+    )
+    image_contents = pz.ListField(
+        element_type=pz.BytesField,
+        desc="A list of the contents of each image of the listing",
+        required=True,
+    )
+
+class TextRealEstateListing(RealEstateListingFiles):
+    """Represents a real estate listing with specific fields extracted from its text."""
+
+    address = pz.StringField(desc="The address of the property")
+    price = pz.NumericField(desc="The listed price of the property")
+
+class ImageRealEstateListing(RealEstateListingFiles):
+    """Represents a real estate listing with specific fields extracted from its text and images."""
+
+    is_modern_and_attractive = pz.BooleanField(
+        desc="True if the home interior design is modern and attractive and False otherwise"
+    )
+    has_natural_sunlight = pz.BooleanField(
+        desc="True if the home interior has lots of natural sunlight and False otherwise"
+    )
+
+
+class RealEstateListingSource(pz.UserSource):
+    def __init__(self, datasetId, listings_dir):
+        super().__init__(RealEstateListingFiles, datasetId)
+        self.listings_dir = listings_dir
+        self.listings = sorted(os.listdir(self.listings_dir))
+
+    def __len__(self):
+        return len(self.listings)
+
+    def getSize(self):
+        return sum(file.stat().st_size for file in Path(self.listings_dir).rglob('*'))
+
+    def getItem(self, idx: int):
+        # fetch listing
+        listing = self.listings[idx]
+
+        # create data record
+        dr = pz.DataRecord(self.schema, scan_idx=idx)
+        dr.listing = listing
+        dr.image_contents = []
+        listing_dir = os.path.join(self.listings_dir, listing)
+        for file in os.listdir(listing_dir):
+            bytes_data = None
+            with open(os.path.join(listing_dir, file), "rb") as f:
+                bytes_data = f.read()
+            if file.endswith(".txt"):
+                dr.text_content = bytes_data.decode("utf-8")
+            elif file.endswith(".png"):
+                dr.image_contents.append(bytes_data)
+
+        return dr
 
 class ScientificPaper(pz.PDFFile):
     """Represents a scientific research paper, which in practice is usually from a PDF file"""
@@ -244,6 +320,44 @@ def buildImageAggPlan(datasetId):
     groupedDogImages = dogImages.groupby(gbyDesc)
     return groupedDogImages
 
+def buildRealEstatePlan(datasetId):
+    def within_two_miles_of_mit(record):
+        # NOTE: I'm using this hard-coded function so that folks w/out a
+        #       Geocoding API key from google can still run this example
+        try:
+            if any(
+                [
+                    street.lower() in record.address.lower()
+                    for street in FAR_AWAY_ADDRS
+                ]
+            ):
+                return False
+            return True
+        except:
+            return False
+
+    def in_price_range(record):
+        try:
+            price = record.price
+            if type(price) == str:
+                price = price.strip()
+                price = int(price.replace("$", "").replace(",", ""))
+            return 6e5 < price and price <= 2e6
+        except:
+            return False
+
+    listings = pz.Dataset(datasetId, schema=RealEstateListingFiles)
+    listings = listings.convert(TextRealEstateListing, depends_on="text_content")
+    listings = listings.convert(
+        ImageRealEstateListing, image_conversion=True, depends_on="image_contents"
+    )
+    listings = listings.filter(
+        "The interior is modern and attractive, and has lots of natural sunlight",
+        depends_on=["is_modern_and_attractive", "has_natural_sunlight"],
+    )
+    listings = listings.filter(within_two_miles_of_mit, depends_on="address")
+    listings = listings.filter(in_price_range, depends_on="price")
+    return listings
 
 def printTable(records, cols=None, gradio=False, query=None, plan=None):
     records = [
@@ -339,6 +453,15 @@ if __name__ == "__main__":
         rootSet = buildMITBatteryPaperPlan(datasetid)
         stat_path = "profiling-data/paper-profiling.json"
         cols = ["title", "publicationYear", "author", "institution", "journal", "fundingAgency"]
+
+    elif task == "real-estate":
+        pz.DataDirectory().registerUserSource(
+            src=RealEstateListingSource(datasetid, "testdata/real-estate-eval-10"),
+            dataset_id=datasetid,
+        )
+        rootSet = buildRealEstatePlan(datasetid)
+        stat_path = "profiling-data/real-estate-profiling.json"
+        cols = None
 
     elif task == "enron":
         rootSet = buildEnronPlan(datasetid)
@@ -443,9 +566,12 @@ if __name__ == "__main__":
         print("Unknown task")
         exit(1)
 
+    available_models = getModels() if task not in ["image", "gbyImage", "real-estate"] else getModels(include_vision=True)
+
     records, plan, stats = pz.Execute(rootSet, 
                                     policy = policy,
                                     nocache=True,
+                                    available_models=available_models,
                                     allow_token_reduction=False,
                                     allow_code_synth=False,
                                     execution_engine=engine)
@@ -478,6 +604,45 @@ if __name__ == "__main__":
                         img_blocks.append(gr.Image(value=img))
                     with gr.Column():
                         breed_blocks.append(gr.Textbox(value=breed))
+
+            plan_str = str(plan)
+            gr.Textbox(value=plan_str, info="Query Plan")
+
+        demo.launch()
+    elif task == 'real-estate':
+        first_imgs, second_imgs, third_imgs, addrs, prices = [], [], [], [], []
+        def img_path_to_array(path):
+            img = Image.open(path).resize((128, 128))
+            return np.asarray(img)
+
+        for record in records:
+            # assuming that this demo is not run on more than 30 real estate listings
+            first_path = os.path.join("testdata/real-estate-eval-30/", record.listing, "img1.png")
+            second_path = os.path.join("testdata/real-estate-eval-30/", record.listing, "img2.png")
+            # third_path = os.path.join("testdata/real-estate-eval-30/", record.listing, "img3.png")
+            print(record)
+            print("Trying to open ", first_path)
+            first_imgs.append(img_path_to_array(first_path))
+            second_imgs.append(img_path_to_array(second_path))
+            # third_imgs.append(img_path_to_array(third_path))
+            addrs.append(record.address)
+            prices.append(record.price)
+
+        with gr.Blocks() as demo:
+            first_img_blocks, second_img_blocks, third_img_blocks, addr_blocks, price_blocks = [], [], [], [], []
+            # for fst_img, snd_img, thd_img, addr, price in zip(first_imgs, second_imgs, third_imgs, addrs, prices):
+            for fst_img, snd_img, addr, price in zip(first_imgs, second_imgs, addrs, prices):
+                with gr.Row():
+                    with gr.Column():
+                        first_img_blocks.append(gr.Image(value=fst_img))
+                    with gr.Column():
+                        second_img_blocks.append(gr.Image(value=snd_img))
+                    # with gr.Column():
+                    #     third_img_blocks.append(gr.Image(value=thd_img))
+                    with gr.Column():
+                        addr_blocks.append(gr.Textbox(value=addr))
+                    with gr.Column():
+                        price_blocks.append(gr.Textbox(value=price))
 
             plan_str = str(plan)
             gr.Textbox(value=plan_str, info="Query Plan")

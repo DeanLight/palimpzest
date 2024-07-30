@@ -244,10 +244,18 @@ class TokenReductionStrategy(PhysicalOpStrategy):
 
         return return_operators
 
-class TokenReducedConvertStrategy(TokenReductionStrategy):
+class TokenReducedConventionalConvertStrategy(TokenReductionStrategy):
     """
-    This strategy creates physical operator classes using a bonded query strategy.
-    It ties together several records for the same fields, possibly defaulting to a conventional conversion strategy.
+    This strategy creates physical operator classes using a conventional query strategy with token reduction.
     """
     logical_op_class = logical.ConvertScan
     physical_op_class = TokenReducedConvert
+    query_strategy = QueryStrategy.CONVENTIONAL
+
+class TokenReducedBondedConvertStrategy(TokenReductionStrategy):
+    """
+    This strategy creates physical operator classes using a bonded query strategy with token reduction.
+    """
+    logical_op_class = logical.ConvertScan
+    physical_op_class = TokenReducedConvert
+    query_strategy = QueryStrategy.BONDED

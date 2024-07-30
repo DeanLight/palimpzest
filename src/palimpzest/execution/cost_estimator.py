@@ -333,7 +333,7 @@ class CostEstimator:
 
     def estimate_plan_cost(self, physical_plan: PhysicalPlan) -> Tuple[float, float, float]:
         # initialize dictionary w/estimates for entire plan
-        plan_estimates = {"total_time": 0.0, "total_cost": 0.0, "quality": 0.0}
+        plan_estimates = {"total_time": 0.0, "total_cost": 0.0, "quality": 1.0}
         sample_op_estimates = self.operator_estimates
 
         op_estimates, source_op_estimates = None, None

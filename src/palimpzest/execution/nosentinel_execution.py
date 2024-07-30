@@ -47,14 +47,12 @@ class NoSentinelExecution(SequentialSingleThreadExecution):
         uid = dataset.universalIdentifier()
         logical_planner = LogicalPlanner(no_cache=True)
         physical_planner = PhysicalPlanner(
-            num_samples=self.num_samples,
-            scan_start_idx=0,
             available_models=self.available_models,
             allow_bonded_query=self.allow_bonded_query,
+            allow_conventional_query=self.allow_conventional_query,
             allow_model_selection=self.allow_model_selection,
             allow_code_synth=self.allow_code_synth,
             allow_token_reduction=self.allow_token_reduction,
-            useParallelOps=self.useParallelOps,
         )
 
         # enumerate all possible physical plans

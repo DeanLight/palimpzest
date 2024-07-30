@@ -62,12 +62,12 @@ class ExecutionEngine:
             min_plans: Optional[int] = None,
             verbose: bool = False,
             available_models: List[Model] = [],
-            allow_bonded_query: List[Model] = True,
+            allow_bonded_query: bool = True,
+            allow_conventional_query: bool=False,
             allow_model_selection: bool=True,
             allow_code_synth: bool=True,
             allow_token_reduction: bool=True,
             execution_strategy: bool=ExecutionStrategy.SINGLE_THREADED,
-            useParallelOps: bool=False,
             max_workers: Optional[int]=None,
             *args, **kwargs
         ) -> None:
@@ -83,6 +83,7 @@ class ExecutionEngine:
         print("Available models: ", self.available_models)
         self.allow_model_selection = allow_model_selection
         self.allow_bonded_query = allow_bonded_query
+        self.allow_conventional_query = allow_conventional_query
         self.allow_code_synth = allow_code_synth
         self.allow_token_reduction = allow_token_reduction
         self.execution_strategy = execution_strategy
@@ -92,7 +93,6 @@ class ExecutionEngine:
         else:
             self.max_workers = 1
         self.datadir = DataDirectory()
-        self.useParallelOps = useParallelOps
 
     def execute_plan(self, plan: PhysicalPlan,
                      plan_type: PlanType = PlanType.FINAL,
@@ -155,14 +155,12 @@ class ExecutionEngine:
         # get sentinel plans
         logical_planner = LogicalPlanner(self.nocache)
         physical_planner = PhysicalPlanner(
-            num_samples=self.num_samples,
-            scan_start_idx=0,
             available_models=self.available_models,
             allow_bonded_query=self.allow_bonded_query,
+            allow_conventional_query=self.allow_conventional_query,
             allow_model_selection=self.allow_model_selection,
             allow_code_synth=self.allow_code_synth,
             allow_token_reduction=self.allow_token_reduction,
-            useParallelOps=self.useParallelOps,
         )
 
         if run_sentinels:
@@ -764,11 +762,11 @@ class Execute:
         min_plans: Optional[int] = None,
         verbose: bool = False,
         available_models: Optional[List[Model]] = [],
-        allow_bonded_query: Optional[List[Model]] = [],
+        allow_bonded_query: Optional[bool] = True,
+        allow_conventional_query: Optional[bool] = False,
         allow_model_selection: Optional[bool]=True,
         allow_code_synth: Optional[bool]=True,
         allow_token_reduction: Optional[bool]=True,
-        useParallelOps: Optional[bool]=False,
         execution_engine: ExecutionEngine = SequentialSingleThreadExecution,
         *args,
         **kwargs
@@ -782,10 +780,10 @@ class Execute:
             verbose=verbose,
             available_models=available_models,
             allow_bonded_query=allow_bonded_query,
+            allow_conventional_query=allow_conventional_query,
             allow_code_synth=allow_code_synth,
             allow_model_selection=allow_model_selection,
             allow_token_reduction=allow_token_reduction,
-            useParallelOps=useParallelOps,
             *args,
             **kwargs
         ).execute(
