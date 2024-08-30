@@ -150,6 +150,9 @@ class DataDirectory(metaclass=DataDirectorySingletonMeta):
             elif all([ f.endswith(tuple(constants.XLS_EXTENSIONS))
                         for f in os.listdir(rock)]):
                 return XLSFileDirectorySource(rock, dataset_id)
+            elif all([ f.endswith(tuple(constants.CSV_EXTENSIONS))
+                        for f in os.listdir(rock)]):
+                return CSVFileDirectorySource(rock, dataset_id)
             elif all([ f.endswith(tuple(constants.HTML_EXTENSIONS))
                         for f in os.listdir(rock)]):
                 return HTMLFileDirectorySource(rock, dataset_id)

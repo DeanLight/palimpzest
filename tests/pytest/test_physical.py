@@ -28,7 +28,7 @@ from utils import remove_cache
 #         "outputSchema": email_schema,
 #         "inputSchema": File,
 #         "model": pz.Model.GPT_3_5,
-#         "cardinality": "oneToOne",
+#         "cardinality": pz.Cardinality.ONE_TO_MANY,
 #     }
 
 #     # simpleConvert = pz.Convert(**params)

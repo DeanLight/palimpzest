@@ -260,7 +260,6 @@ class XLSFile(File):
         required=True,
     )
 
-
 class Table(Schema):
     """A Table is an object composed of a header and rows."""
 

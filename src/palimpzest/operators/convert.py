@@ -406,7 +406,6 @@ class LLMConvert(ConvertOp):
         try:
             # parse json from answer string
             json_answer = getJsonFromAnswer(answer)
-
             # sanity check validity of parsed json
             assert json_answer != {}, "No output was found!"
             if self.cardinality == Cardinality.ONE_TO_MANY:
@@ -426,6 +425,7 @@ class LLMConvert(ConvertOp):
                 # print(f"\tAnswer snippet: {answer.splitlines()[line]}")
             return {field_name: [] for field_name in fields_to_generate}
 
+        breakpoint()
         field_answers = {}
         if self.cardinality == Cardinality.ONE_TO_MANY:
             # json_answer["items"] is a list of dictionaries, each of which contains the generated fields
@@ -487,6 +487,7 @@ class LLMConvert(ConvertOp):
     def __call__(self, candidate: DataRecord) -> List[DataRecordsWithStats]:
         start_time = time.time()
         fields_to_generate = self._generate_field_names(candidate, self.inputSchema, self.outputSchema)
+        assert len(fields_to_generate) > 0, "No fields to generate!"           
 
         # get text or image content depending on prompt strategy
         if self.image_conversion:

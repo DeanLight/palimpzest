@@ -25,29 +25,44 @@ class CaseData(pz.Schema):
 # pz reg --name biofabric-tiny --path testdata/biofabric-tiny
 pz.DataDirectory().clearCache(keep_registry=True)
 
-xls = pz.Dataset('biofabric-tiny', schema=pz.CSVFile)
-patient_tables = xls.convert(pz.Table, desc="All tables in the file", cardinality="oneToMany")
+patient_tables = pz.Dataset('biofabric-mimic', schema=pz.Table)
 patient_tables = patient_tables.filter("The table contains biometric information about the patient")
-case_data = patient_tables.convert(CaseData, desc="The patient data in the table",cardinality="oneToMany")
+case_data = patient_tables.convert(CaseData, desc="The patient data in the table",cardinality=pz.Cardinality.ONE_TO_MANY)
 
-output = patient_tables
+output = case_data
 
 policy = pz.MinCost()
-engine = pz.StreamingSequentialExecution
+engine = pz.StreamingSequentialExecution(
+    allow_bonded_query=True,
+    allow_code_synth=False,
+    allow_token_reduction=False,
+)
 
-tables, plan, stats = pz.Execute(patient_tables, 
-                                  policy = policy,
-                                  nocache=True,
-                                  execution_engine=engine)
+plan = engine.generate_plan(dataset=output, policy=policy)
 
-for table in tables:
-    header = table.header
-    subset_rows = table.rows[:3]
+input_records = engine.get_input_records()
+for idx, record in enumerate(input_records):
+    output_records = engine.execute_opstream(plan, record)
+    if idx == len(input_records) - 1:
+        total_time = time.time() - start_time
+        engine.plan_stats.finalize(total_time)
+        finished = True
+    stats = engine.plan_stats
+    
+    for table in output_records:
+        header = table.header
+        subset_rows = table.rows[:3]
 
-    print("Table name:", table.name)
-    print(" | ".join(header)[:100], "...")
-    for row in subset_rows:
-        print(" | ".join(row)[:100], "...")
-    print()
+        print("Table name:", table.name)
+        print(table)
+        # breakpoint()
+        print(table.case_submitter_id, end=", ", flush=True)
+        print(table.age_at_diagnosis, end=", ", flush=True)
+        print(table.race, end=", ", flush=True)
+        print(table.ethnicity, end=", ", flush=True)
+        print(table.gender, end=", ", flush=True)
+        print(table.vital_status, end=", ", flush=True)
+        print(table.primary_diagnosis, flush=True)
+        input("Press Enter to continue...")
 
 print(stats)

@@ -259,7 +259,7 @@ def get_workload_for_eval_dataset(dataset):
             "The rows of the table contain the patient age"
         )
         case_data = patient_tables.convert(
-            CaseData, desc="The patient data in the table", cardinality="oneToMany"
+            CaseData, desc="The patient data in the table", cardinality=pz.Cardinality.ONE_TO_MANY
         )
 
         return case_data
