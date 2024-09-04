@@ -49,6 +49,7 @@ class Set:
         groupBy: GroupBySig = None,
         limit: int = None,
         fnid: str = None,
+        on: str = None,
         cardinality: Cardinality = Cardinality.ONE_TO_ONE,
         image_conversion: bool = None,
         depends_on: List[str] = [],
@@ -63,6 +64,7 @@ class Set:
         self._groupBy = groupBy
         self._limit = limit
         self._fnid = fnid
+        self._on = on
         self._cardinality = cardinality
         self._image_conversion = image_conversion
         self._depends_on = depends_on
@@ -75,7 +77,7 @@ class Set:
         d = {
             "version": Set.SET_VERSION,
             "schema": self.schema.jsonSchema(),
-            "source": self._source.serialize(),
+            "source": [s.serialize() for s in self._source],
             "desc": repr(self._desc),
             "filter": None if self._filter is None else self._filter.serialize(),
             "udf": None if self._udf is None else str(self._udf),
@@ -105,7 +107,7 @@ class Set:
         Return the dataset_id of the DataSource if this Set's source is a DataSource.
         Otherwise return None.
         """
-        return self._source.dataset_id if isinstance(self._source, DataSource) else None
+        return self._source[0].dataset_id if isinstance(self._source[0], DataSource) else None
 
     def jsonSchema(self):
         """Return the JSON schema for this Set."""
@@ -128,7 +130,7 @@ class Dataset(Set):
     def __init__(self, source: Union[str, DataSource], *args, **kwargs):
         # convert source (str) -> source (DataSource) if need be
         source = (
-            DataDirectory().getRegisteredDataset(source)
+            [DataDirectory().getRegisteredDataset(source)]
             if isinstance(source, str)
             else source
         )
@@ -155,7 +157,7 @@ class Dataset(Set):
             raise Exception("Filter type not supported.", type(_filter))
 
         return Dataset(
-            source=self,
+            source=[self],
             schema=self.schema,
             desc=desc,
             filter=f,
@@ -174,7 +176,7 @@ class Dataset(Set):
     ) -> Dataset:
         """Convert the Set to a new schema."""
         return Dataset(
-            source=self,
+            source=[self],
             schema=outputSchema,
             udf=udf,
             cardinality=cardinality,
@@ -184,10 +186,20 @@ class Dataset(Set):
             nocache=self._nocache,
         )
 
+    def join(self, other: Dataset, on: str) -> Dataset:
+        """Join this set with another set on a common column
+        The resulting set will have the schema of the union of the two sets but formally the schema of the first set #TODO"""
+        return Dataset(
+            source=[self, other],
+            schema=self.schema+other.schema,
+            on=on,
+            nocache=self._nocache,
+        )
+
     def count(self) -> Dataset:
         """Apply a count aggregation to this set"""
         return Dataset(
-            source=self,
+            source=[self],
             schema=Number,
             desc="Count results",
             aggFunc=AggFunc.COUNT,
@@ -197,7 +209,7 @@ class Dataset(Set):
     def average(self) -> Dataset:
         """Apply an average aggregation to this set"""
         return Dataset(
-            source=self,
+            source=[self],
             schema=Number,
             desc="Average results",
             aggFunc=AggFunc.AVERAGE,
@@ -206,7 +218,7 @@ class Dataset(Set):
 
     def groupby(self, groupBy: GroupBySig) -> Dataset:
         return Dataset(
-            source=self,
+            source=[self],
             schema=groupBy.outputSchema(),
             desc="Group By",
             groupBy=groupBy,
@@ -216,7 +228,7 @@ class Dataset(Set):
     def limit(self, n: int) -> Dataset:
         """Limit the set size to no more than n rows"""
         return Dataset(
-            source=self,
+            source=[self],
             schema=self.schema,
             desc="LIMIT " + str(n),
             limit=n,

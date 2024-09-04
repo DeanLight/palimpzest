@@ -90,7 +90,8 @@ class ExecutionEngine:
         """
         # iterate until we reach DataSource
         while isinstance(dataset, Set):
-            dataset = dataset._source
+            dataset = dataset._source[0]
+        # TODO joins will disrupt this logic
 
         # throw an exception if datasource is not registered with PZ
         _ = self.datadir.getRegisteredDataset(dataset.dataset_id)

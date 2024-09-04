@@ -140,11 +140,16 @@ class Optimizer:
         # get node, outputSchema, and inputSchema(if applicable)
         node = dataset_nodes[-1]
         outputSchema = node.schema
-        inputSchema = dataset_nodes[-2].schema if len(dataset_nodes) > 1 else None
+        try:
+            if len(node._source) == 1:
+                inputSchema = node._source[0].schema
+            else:
+                inputSchema = node._source[0].schema + node._source[1].schema # TODO implement __radd__ for sum(schemata)
+        except AttributeError:
+            inputSchema = None
 
         ### convert node --> Group ###
         uid = node.universalIdentifier()
-
         # create the op for the given node
         op: LogicalOperator = None
         if not self.no_cache and DataDirectory().hasCachedAnswer(uid):
@@ -186,6 +191,15 @@ class Optimizer:
                 targetCacheId=uid,
             )
 
+        elif node._on is not None:
+            op = Join(
+                inputSchema=inputSchema,
+                outputSchema=outputSchema,
+                left=node._source[0].schema,
+                right=node._source[1].schema,
+                on=node._on,
+                )
+            
         elif not outputSchema == inputSchema:
             op = ConvertScan(
                 inputSchema=inputSchema,
@@ -259,30 +273,46 @@ class Optimizer:
         dataset_nodes = []
         node = query_plan # TODO: copy
 
-        while isinstance(node, Dataset):
+        processing_queue = [node]
+        while len(processing_queue) > 0:
+            node = processing_queue.pop(0)
             dataset_nodes.append(node)
-            node = node._source
-        dataset_nodes.append(node)
+            try:
+                processing_queue.extend(node._source)
+            # Dataset sources will not be iterable
+            except TypeError:
+                processing_queue.append(node._source)
+            # The first node in the query plan will not have a _source attribute
+            except AttributeError:
+                pass
+        # dataset_nodes.append(node)
         dataset_nodes = list(reversed(dataset_nodes))
 
+        # TODO this won't work for joins
         # remove unnecessary convert if output schema from data source scan matches
         # input schema for the next operator
-        if len(dataset_nodes) > 1 and dataset_nodes[0].schema == dataset_nodes[1].schema:
-            dataset_nodes = [dataset_nodes[0]] + dataset_nodes[2:]
-            if len(dataset_nodes) > 1:
-                dataset_nodes[1]._source = dataset_nodes[0]
+        # try:
+            # if len(dataset_nodes) > 1 and dataset_nodes[0].schema == dataset_nodes[1].schema:
+                # dataset_nodes = [dataset_nodes[0]] + dataset_nodes[2:]
+                # if len(dataset_nodes) > 1:
+                    # dataset_nodes[1]._source = [dataset_nodes[0]]
+        # except AttributeError:
+            # breakpoint()
 
         # compute depends_on field for every node
         for node_idx, node in enumerate(dataset_nodes):
             # if the node is a data source or already has depends_on specified, then skip
-            if isinstance(node, DataSource) or len(node._depends_on) > 0:
+            if isinstance(node, DataSource):
+                node._depends_on = []
+            elif len(node._depends_on) > 0: # TODO are we sure we offset this to users completely?
                 continue
-
-            # otherwise, make the node depend on all upstream nodes
-            node._depends_on = set()
-            for upstream_node in dataset_nodes[:node_idx]:
-                node._depends_on.update(upstream_node.schema.fieldNames(unique=True, id=node.universalIdentifier()))
-            node._depends_on = list(node._depends_on)
+            else:
+                # otherwise, make the node depend on the parent nodes, and all their depends_on fields
+                node._depends_on = set()
+                for parent in node._source:
+                    node._depends_on.update(parent.schema.fieldNames(unique=True, id=parent.universalIdentifier()))
+                    node._depends_on.update(parent._depends_on)
+                node._depends_on = list(node._depends_on)
 
         # construct tree of groups
         final_group_id, _, _ = self.construct_group_tree(dataset_nodes)

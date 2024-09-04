@@ -48,8 +48,45 @@ class DataSourcePhysicalOp(PhysicalOperator):
         """
         raise NotImplementedError("Abstract method")
 
+class MarshalOrCacheDataOp(DataSourcePhysicalOp):
+    """ Common class since the two operators use the same __call__ method 
+    # TODO Maybe this can just be part of DataSourcePhysicalOp
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.finished = False
 
-class MarshalAndScanDataOp(DataSourcePhysicalOp):
+    def __call__(self, candidate: DataRecord) -> List[DataRecordsWithStats]:
+        """
+        This function takes the candidate -- which is a DataRecord with a SourceRecord schema --
+        and invokes its get_item_fn on the given idx to return the next DataRecord from the DataSource.
+        """
+        start_time = time.time()
+        output = self.get_item_fn(candidate.idx)
+        records = [output] if self.cardinality == Cardinality.ONE_TO_ONE else output
+        end_time = time.time()
+
+        # create RecordOpStats objects
+        record_op_stats_lst = []
+        for record in records:
+            record_op_stats = RecordOpStats(
+                record_id=record._id,
+                record_parent_id=record._parent_id,
+                record_state=record._asDict(include_bytes=False),
+                op_id=self.get_op_id(),
+                op_name=self.op_name(),
+                time_per_record=(end_time - start_time) / len(records),
+                cost_per_record=0.0,
+            )
+            record_op_stats_lst.append(record_op_stats)
+
+        if candidate.idx == self.datasource_len-1:
+            self.finished = True
+            return [], []
+
+        return records, record_op_stats_lst
+
+class MarshalAndScanDataOp(MarshalOrCacheDataOp):
 
     def __eq__(self, other: PhysicalOperator):
         return (
@@ -90,33 +127,8 @@ class MarshalAndScanDataOp(DataSourcePhysicalOp):
             quality=1.0,
         )
 
-    def __call__(self, candidate: DataRecord) -> List[DataRecordsWithStats]:
-        """
-        This function takes the candidate -- which is a DataRecord with a SourceRecord schema --
-        and invokes its get_item_fn on the given idx to return the next DataRecord from the DataSource.
-        """
-        start_time = time.time()
-        output = candidate.get_item_fn(candidate.idx)
-        records = [output] if candidate.cardinality == Cardinality.ONE_TO_ONE else output
-        end_time = time.time()
 
-        # create RecordOpStats objects
-        record_op_stats_lst = []
-        for record in records:
-            record_op_stats = RecordOpStats(
-                record_id=record._id,
-                record_parent_id=record._parent_id,
-                record_state=record._asDict(include_bytes=False),
-                op_id=self.get_op_id(),
-                op_name=self.op_name(),
-                time_per_record=(end_time - start_time) / len(records),
-                cost_per_record=0.0,
-            )
-            record_op_stats_lst.append(record_op_stats)
-
-        return records, record_op_stats_lst
-
-class CacheScanDataOp(DataSourcePhysicalOp):
+class CacheScanDataOp(MarshalOrCacheDataOp):
 
     def __init__(
         self,
@@ -174,25 +186,3 @@ class CacheScanDataOp(DataSourcePhysicalOp):
             cost_per_record=0,
             quality=1.0,
         )
-
-    def __call__(self, candidate: DataRecord) -> List[DataRecordsWithStats]:
-        start_time = time.time()
-        output = candidate.get_item_fn(candidate.idx)
-        records = [output] if candidate.cardinality == Cardinality.ONE_TO_ONE else output
-        end_time = time.time()
-
-        # create RecordOpStats objects
-        record_op_stats_lst = []
-        for record in records:
-            record_op_stats = RecordOpStats(
-                record_id=record._id,
-                record_parent_id=record._parent_id,
-                record_state=record._asDict(include_bytes=False),
-                op_id=self.get_op_id(),
-                op_name=self.op_name(),
-                time_per_record=(end_time - start_time) / len(records),
-                cost_per_record=0.0,
-            )
-            record_op_stats_lst.append(record_op_stats)
-
-        return records, record_op_stats_lst

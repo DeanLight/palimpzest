@@ -1,5 +1,6 @@
 from palimpzest.constants import AggFunc
 from palimpzest.operators import *
+from palimpzest.operators.join import NonLLMJoin
 from palimpzest.optimizer.primitives import Group, Expression, LogicalExpression, PhysicalExpression
 from palimpzest.utils.model_helpers import getVisionModels
 
@@ -502,6 +503,34 @@ class AggregateRule(ImplementationRule):
             op = AverageAggregateOp(**op_kwargs)
         else:
             raise Exception(f"Cannot support aggregate function: {logical_op.aggFunc}")
+
+        expression = PhysicalExpression(
+            operator=op,
+            input_group_ids=logical_expression.input_group_ids,
+            input_fields=logical_expression.input_fields,
+            generated_fields=logical_expression.generated_fields,
+            group_id=logical_expression.group_id,
+        )
+        return set([expression])
+
+class JoinRule(ImplementationRule):
+    """
+    Substitute the logical expression for a join with its physical counterpart.
+    """
+    @staticmethod
+    def matches_pattern(logical_expression: LogicalExpression) -> bool:
+        return isinstance(logical_expression.operator, Join)
+
+    @staticmethod
+    def substitute(logical_expression: LogicalExpression, **physical_op_params) -> Set[PhysicalExpression]:
+        logical_op = logical_expression.operator
+        op_kwargs = logical_op.get_op_params()
+        op_kwargs.update({
+            "verbose": physical_op_params['verbose'],
+            "logical_op_id": logical_op.get_op_id(),
+        })
+
+        op = NonLLMJoin(**op_kwargs)
 
         expression = PhysicalExpression(
             operator=op,

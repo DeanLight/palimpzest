@@ -2,8 +2,9 @@ from palimpzest.corelib.schemas import SourceRecord
 from palimpzest.dataclasses import OperatorStats, PlanStats
 from palimpzest.elements import DataRecord
 from palimpzest.execution import ExecutionEngine
-from palimpzest.operators import AggregateOp, DataSourcePhysicalOp, LimitScanOp, MarshalAndScanDataOp
+from palimpzest.operators import AggregateOp, DataSourcePhysicalOp, LimitScanOp, MarshalAndScanDataOp, CacheScanDataOp
 from palimpzest.operators.filter import FilterOp
+from palimpzest.operators.join import JoinOp
 from palimpzest.optimizer import PhysicalPlan
 
 from typing import Optional, Union
@@ -38,26 +39,26 @@ class SequentialSingleThreadPlanExecutor(ExecutionEngine):
 
         # initialize list of output records and intermediate variables
         output_records = []
-        current_scan_idx = self.scan_start_idx
 
         # get handle to DataSource and pre-compute its size
-        source_operator = plan.operators[0]
-        datasource = (
-            self.datadir.getRegisteredDataset(self.source_dataset_id)
-            if isinstance(source_operator, MarshalAndScanDataOp)
-            else self.datadir.getCachedResult(source_operator.cachedDataIdentifier)
-        )
-        datasource_len = len(datasource)
-
-        # initialize processing queues for each operation
-        processing_queues = {
-            op.get_op_id(): []
-            for op in plan.operators
-            if not isinstance(op, DataSourcePhysicalOp)
-        }
+        processing_queues = {}
+        for op in plan.operators:
+            op_id = op.get_op_id()
+            if isinstance(op, DataSourcePhysicalOp):
+                datasource = (
+                    self.datadir.getRegisteredDataset(self.source_dataset_id)
+                    if isinstance(op, MarshalAndScanDataOp)
+                    else self.datadir.getCachedResult(op.cachedDataIdentifier)
+                )
+                op.get_item_fn = datasource.getItem
+                op.cardinality = datasource.cardinality
+                op.datasource_len = len(datasource)
+            processing_queues[op_id] = []
 
         # execute the plan one operator at a time
         for op_idx, operator in enumerate(plan.operators):
+            print(processing_queues)
+            breakpoint()
             op_id = operator.get_op_id()
             prev_op_id = (
                 plan.operators[op_idx - 1].get_op_id() if op_idx > 1 else None
@@ -73,13 +74,12 @@ class SequentialSingleThreadPlanExecutor(ExecutionEngine):
 
             # invoke datasource operator(s) until we run out of source records or hit the num_samples limit
             if isinstance(operator, DataSourcePhysicalOp):
-                keep_scanning_source_records = True
-                while keep_scanning_source_records:
+                current_scan_idx = self.scan_start_idx # TODO this means every datasource starts from the beginning
+
+                while len(records) < num_samples and not operator.finished:
                     # construct input DataRecord for DataSourcePhysicalOp
                     candidate = DataRecord(schema=SourceRecord, parent_id=None, scan_idx=current_scan_idx)
                     candidate.idx = current_scan_idx
-                    candidate.get_item_fn = datasource.getItem
-                    candidate.cardinality = datasource.cardinality
 
                     # run DataSourcePhysicalOp on record
                     out_records, out_record_op_stats_lst = operator(candidate)
@@ -89,14 +89,9 @@ class SequentialSingleThreadPlanExecutor(ExecutionEngine):
                     # update the current scan index
                     current_scan_idx += 1
 
-                    # update whether to keep scanning source records
-                    keep_scanning_source_records = (
-                        current_scan_idx < datasource_len
-                        and len(records) < num_samples
-                    )
 
             # aggregate operators accept all input records at once
-            elif isinstance(operator, AggregateOp):
+            elif isinstance(operator, AggregateOp) or isinstance(operator, JoinOp):
                 records, record_op_stats_lst = operator(candidates=processing_queues[op_id])
 
             # otherwise, process the records in the processing queue for this operator one at a time

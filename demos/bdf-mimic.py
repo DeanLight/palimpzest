@@ -7,7 +7,7 @@ from palimpzest.constants import PZ_DIR
 import palimpzest as pz
 
 import pandas as pd
-import os
+import time
 
 pz.DataDirectory().clearCache(keep_registry=True)
 
@@ -31,7 +31,7 @@ case_data = patient_tables.convert(CaseData, desc="The patient data in the table
 
 output = case_data
 
-policy = pz.MinCost()
+policy = pz.MaxQuality()
 engine = pz.StreamingSequentialExecution(
     allow_bonded_query=True,
     allow_code_synth=False,
@@ -40,6 +40,7 @@ engine = pz.StreamingSequentialExecution(
 
 plan = engine.generate_plan(dataset=output, policy=policy)
 
+start_time = time.time()
 input_records = engine.get_input_records()
 for idx, record in enumerate(input_records):
     output_records = engine.execute_opstream(plan, record)
@@ -54,7 +55,6 @@ for idx, record in enumerate(input_records):
         subset_rows = table.rows[:3]
 
         print("Table name:", table.name)
-        print(table)
         # breakpoint()
         print(table.case_submitter_id, end=", ", flush=True)
         print(table.age_at_diagnosis, end=", ", flush=True)
@@ -63,6 +63,6 @@ for idx, record in enumerate(input_records):
         print(table.gender, end=", ", flush=True)
         print(table.vital_status, end=", ", flush=True)
         print(table.primary_diagnosis, flush=True)
-        input("Press Enter to continue...")
+        # input("Press Enter to continue...")
 
 print(stats)
