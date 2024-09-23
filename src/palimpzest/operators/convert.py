@@ -350,6 +350,8 @@ class LLMConvert(ConvertOp):
                 time_per_record=total_time / num_records,
                 cost_per_record=per_record_stats.cost_per_record,
                 model_name=model.value if model else None,
+                prompt=per_record_stats.prompt,
+                full_answer=per_record_stats.full_answer,
                 answer=answer,
                 input_fields=self.inputSchema.fieldNames(),
                 generated_fields=fields,

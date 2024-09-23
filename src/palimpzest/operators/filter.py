@@ -257,6 +257,8 @@ class LLMFilter(FilterOp):
             time_per_record=time.time() - start_time,
             cost_per_record=gen_stats.cost_per_record,
             model_name=self.model.value,
+            prompt=gen_stats.prompt,
+            full_answer=gen_stats.full_answer,
             filter_str=self.filter.getFilterStr(),
             total_input_tokens=gen_stats.total_input_tokens,
             total_output_tokens=gen_stats.total_output_tokens,

@@ -391,23 +391,25 @@ class DSPyGenerator(BaseGenerator):
             total_input_cost=input_tokens * usd_per_input_token,
             total_output_cost=output_tokens * usd_per_output_token,
             cost_per_record=input_tokens * usd_per_input_token + output_tokens * usd_per_output_token,
+            prompt=dspy_lm.history[-1]["prompt"],
+            full_answer=dspy_lm.history[-1]['response']['choices'][-1]['message']['content'],
         )
-        # create GenerationStats
-        stats = GenerationStats(**{
-            "model_name": self.model_name,
-            "llm_call_duration_secs": end_time - start_time,
-            "fn_call_duration_secs": 0.0,
-            "total_input_tokens": input_tokens,
-            "total_output_tokens": output_tokens,
-            "total_input_cost": input_tokens * usd_per_input_token,
-            "total_output_cost": output_tokens * usd_per_output_token,
-            "cost_per_record": input_tokens * usd_per_input_token + output_tokens * usd_per_output_token,
-            # "prompt": dspy_lm.history[-1]["prompt"],
-            # "usage": usage,
-            # "finish_reason": finish_reason,
-            # "answer_log_probs": answer_log_probs,
-            # "answer": pred.answer,
-        })
+        # # create GenerationStats
+        # stats = GenerationStats(**{
+        #     "model_name": self.model_name,
+        #     "llm_call_duration_secs": end_time - start_time,
+        #     "fn_call_duration_secs": 0.0,
+        #     "total_input_tokens": input_tokens,
+        #     "total_output_tokens": output_tokens,
+        #     "total_input_cost": input_tokens * usd_per_input_token,
+        #     "total_output_cost": output_tokens * usd_per_output_token,
+        #     "cost_per_record": input_tokens * usd_per_input_token + output_tokens * usd_per_output_token,
+        #     # "prompt": dspy_lm.history[-1]["prompt"],
+        #     # "usage": usage,
+        #     # "finish_reason": finish_reason,
+        #     # "answer_log_probs": answer_log_probs,
+        #     # "answer": pred.answer,
+        # })
 
         if self.verbose:
             print("Prompt history:")

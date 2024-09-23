@@ -229,7 +229,7 @@ class ExecutionEngine:
         # execute the plan
         records, plan_stats = self.execute_plan(
             plan=final_plan,
-            max_workers=self.max_workers,
+            plan_workers=self.max_workers,
         )
 
         # return the output records and plan stats
@@ -273,7 +273,7 @@ class ExecutionEngine:
             final_plan = plans[0]
             new_records, new_plan_stats = self.execute_plan(
                 plan=final_plan,
-                max_workers=self.max_workers,
+                plan_workers=self.max_workers,
             )
             records.extend(new_records)
             plan_stats.append(new_plan_stats)

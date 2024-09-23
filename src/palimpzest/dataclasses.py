@@ -34,6 +34,10 @@ class GenerationStats:
     # (if applicable) the time (in seconds) spent executing a call to a function
     fn_call_duration_secs: float = 0.0
 
+    # TODO: remove
+    prompt: str = ""
+    full_answer: str = ""
+
     def __iadd__(self, other: GenerationStats) -> GenerationStats:
         # self.raw_answers.extend(other.raw_answers)
         for field in ['total_input_tokens', 'total_output_tokens', 'total_input_cost', 'total_output_cost', 'cost_per_record', 'llm_call_duration_secs', 'fn_call_duration_secs']:
@@ -43,9 +47,11 @@ class GenerationStats:
     def __add__(self, other: GenerationStats) -> GenerationStats:
         dct = {field: getattr(self, field) + getattr(other, field) for field in ['total_input_tokens', 'total_output_tokens', 'total_input_cost', 'total_output_cost', 'llm_call_duration_secs', 'fn_call_duration_secs', 'cost_per_record']}
         # dct['raw_answers'] = self.raw_answers + other.raw_answers
-        dct['model_name'] = self.model_name      
+        dct['model_name'] = self.model_name
+        dct['prompt'] = self.prompt
+        dct['full_answer'] = self.full_answer
         return GenerationStats(**dct)
-    
+
     # Do the same as iadd and add but with division operator
     def __itruediv__(self, quotient: float) -> GenerationStats:
         if quotient == 0:
@@ -55,19 +61,21 @@ class GenerationStats:
         for field in ['total_input_tokens', 'total_output_tokens', 'total_input_cost', 'total_output_cost', 'cost_per_record', 'llm_call_duration_secs', 'fn_call_duration_secs']:
             setattr(self, field, getattr(self, field) / quotient)
         return self
-    
+
     def __truediv__(self, quotient: float) -> GenerationStats:
         if quotient == 0:
             raise ZeroDivisionError("Cannot divide by zero")
         if isinstance(quotient, int):
             quotient = float(quotient)
         dct = {field: getattr(self, field) / quotient for field in ['total_input_tokens', 'total_output_tokens', 'total_input_cost', 'total_output_cost', 'llm_call_duration_secs', 'fn_call_duration_secs', 'cost_per_record']}
-        dct['model_name'] = self.model_name      
+        dct['model_name'] = self.model_name
+        dct['prompt'] = self.prompt
+        dct['full_answer'] = self.full_answer
         return GenerationStats(**dct)
 
     def __radd__(self, other: int) -> GenerationStats:
         return self
-    
+
 @dataclass
 class RecordOpStats:
     """
@@ -105,6 +113,10 @@ class RecordOpStats:
     ##### OPTIONAL FIELDS (I.E. ONLY MANDATORY FOR CERTAIN OPERATORS) #####
     # (if applicable) the name of the model used to generate the output for this record
     model_name: Optional[str] = None
+
+    # TODO: remove
+    prompt: Optional[str] = None
+    full_answer: Optional[str] = None
 
     # (if applicable) the mapping from field-name to generated output for this record
     answer: Optional[Dict[str, Any]] = None
